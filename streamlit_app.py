@@ -96,7 +96,37 @@ else:
             # Use the genai client to generate content. This is a simple non-streaming
             # call — adjust to streaming if needed and supported by your genai client version.
             response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            text = getattr(response, "text", None) or response.content if hasattr(response, "content") else str(response)
+
+            # Best-effort extraction of human-readable text from the genai response.
+            # Different versions of google-genai expose different shapes; prefer
+            # `response.candidates[0].content.parts[*].text` when available.
+            text = ""
+            try:
+                # Newer response shape: response.candidates -> Candidate.content.parts -> Part.text
+                if hasattr(response, "candidates") and response.candidates:
+                    candidate = response.candidates[0]
+                    content = getattr(candidate, "content", None)
+                    parts = getattr(content, "parts", None)
+                    if parts:
+                        # Join all part.text values
+                        text = "".join(getattr(p, "text", str(p)) for p in parts).strip()
+                    else:
+                        # candidate.content may be a plain string or object
+                        text = str(content).strip()
+                # Fallbacks
+                elif hasattr(response, "text") and response.text:
+                    text = str(response.text).strip()
+                elif hasattr(response, "content") and response.content:
+                    text = str(response.content).strip()
+                else:
+                    text = str(response).strip()
+            except Exception:
+                # Last resort: string representation
+                text = str(response).strip()
+
+            # Make the assistant reply look clean in the UI
+            if not text:
+                text = "(no text returned from Gemini)"
 
             with st.chat_message("assistant"):
                 st.markdown(text)

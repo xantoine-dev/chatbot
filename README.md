@@ -17,3 +17,22 @@ A simple Streamlit app that shows how to build a chatbot using OpenAI's GPT-3.5.
    ```
    $ streamlit run streamlit_app.py
    ```
+
+Environment / Gemini notes
+--------------------------
+
+This project can use either OpenAI or Google Gemini (via the `google-genai` client). To use Gemini:
+
+1. Install the dependencies (the `google-genai` package is listed in `requirements.txt`).
+
+2. Provide your Gemini API key via the `GEMINI_API_KEY` environment variable or paste it into the app when selecting the "Gemini (Google)" provider.
+
+Example (Linux/macOS):
+
+```bash
+export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+streamlit run streamlit_app.py
+```
+
+Or create a local `.env` file (copy `.env.example`) and set the key there if you use a dotenv loader.
+

@@ -13,39 +13,52 @@ st.write(
 # Choose provider: OpenAI or Gemini
 provider = st.radio("Model provider", ["OpenAI", "Gemini (Google)"], index=0)
 
+# Keep chat history and instructions separate per provider to avoid leaking state.
+messages_key = f"{provider}_messages"
+instructions_key = f"{provider}_instructions"
+st.session_state.setdefault(messages_key, [])
+st.session_state.setdefault(instructions_key, "")
+
+# Shared UI for custom instructions
+custom_instructions = st.text_area(
+    "Custom instructions (optional)",
+    value=st.session_state[instructions_key],
+    placeholder="Add system-style guidance for the assistant (tone, persona, constraints, etc.)",
+    help="These instructions are sent with every request.",
+    key=instructions_key,
+)
+
 if provider == "OpenAI":
     # Ask user for their OpenAI API key via `st.text_input`.
     openai_api_key = st.text_input("OpenAI API Key", type="password")
-    if not openai_api_key:
-        st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-    else:
-
-        # Create an OpenAI client.
+    if openai_api_key:
         client = OpenAI(api_key=openai_api_key)
-
-        # Create a session state variable to store the chat messages. This ensures that the
-        # messages persist across reruns.
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+    else:
+        st.info("Please add your OpenAI API key to continue.", icon="🗝️")
 
     # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
+    for message in st.session_state[messages_key]:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+    # Create a chat input field to allow the user to enter a message. Disable it until a key exists.
+    if prompt := st.chat_input("What is up?", disabled=not openai_api_key):
 
         # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state[messages_key].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
+
+        # Build payload: include custom instructions as a system message, then conversation.
+        payload = []
+        if custom_instructions.strip():
+            payload.append({"role": "system", "content": custom_instructions.strip()})
+        payload.extend({"role": m["role"], "content": m["content"]} for m in st.session_state[messages_key])
 
         # Generate a response using the OpenAI API (streaming supported by the client)
         stream = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
+            messages=payload,
             stream=True,
         )
 
@@ -53,7 +66,7 @@ if provider == "OpenAI":
         # session state.
         with st.chat_message("assistant"):
             response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state[messages_key].append({"role": "assistant", "content": response})
 
 else:
     # Gemini (Google) path
@@ -79,23 +92,32 @@ else:
         os.environ["GEMINI_API_KEY"] = gemini_api_key
         client = genai.Client()
 
-        # Session state for messages
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-
         # Display previous messages
-        for message in st.session_state.messages:
+        for message in st.session_state[messages_key]:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
         if prompt := st.chat_input("What is up?"):
-            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state[messages_key].append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
+            # Prepare a multi-turn chat payload; best-effort compatibility with google-genai.
+            contents = []
+            if custom_instructions.strip():
+                contents.append(
+                    {"role": "user", "parts": [{"text": f"System instructions: {custom_instructions.strip()}"}]}
+                )
+            for m in st.session_state[messages_key]:
+                role = "user" if m["role"] == "user" else "model"
+                contents.append({"role": role, "parts": [{"text": m["content"]}]})
+
             # Use the genai client to generate content. This is a simple non-streaming
             # call — adjust to streaming if needed and supported by your genai client version.
-            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+            )
 
             # Best-effort extraction of human-readable text from the genai response.
             # Different versions of google-genai expose different shapes; prefer
@@ -130,4 +152,4 @@ else:
 
             with st.chat_message("assistant"):
                 st.markdown(text)
-            st.session_state.messages.append({"role": "assistant", "content": text})
+            st.session_state[messages_key].append({"role": "assistant", "content": text})

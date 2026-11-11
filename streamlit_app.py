@@ -86,11 +86,8 @@ else:
             st.error("The google-genai package is not installed or failed to import. Make sure it's in requirements.txt and installed.")
             st.stop()
 
-        # Create a genai client which will read key from the environment or accept a key
-        # Note: the genai client reads credentials from the environment variable `GEMINI_API_KEY`.
-        # We'll set it in the environment for the duration of this run if provided via text input.
-        os.environ["GEMINI_API_KEY"] = gemini_api_key
-        client = genai.Client()
+        # Keep user-entered credentials local to this session's client.
+        client = genai.Client(api_key=gemini_api_key)
 
         # Display previous messages
         for message in st.session_state[messages_key]:

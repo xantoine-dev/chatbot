@@ -34,3 +34,9 @@ streamlit run streamlit_app.py
 
 Or create a local `.env` file (copy `.env.example`) and set the key there if you use a dotenv loader.
 
+Run the offline credential regression tests (Python standard library only):
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
